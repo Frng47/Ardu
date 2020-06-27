@@ -1,0 +1,1199 @@
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- pom.xml	(date 1593187163018)
++++ pom.xml	(date 1593187163018)
+@@ -0,0 +1,108 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project xmlns="http://maven.apache.org/POM/4.0.0"
++         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++    <modelVersion>4.0.0</modelVersion>
++
++    <groupId>groupId</groupId>
++    <artifactId>ArduinoApp</artifactId>
++    <version>1.0.1</version>
++        <developers>
++        <developer><name>MaxGladikov</name></developer>
++        </developers>
++        <properties>
++        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
++    </properties>
++        <build>
++<finalName>ArduinoApp</finalName>
++    <plugins>
++        <plugin>
++            <groupId>org.apache.maven.plugins</groupId>
++            <artifactId>maven-compiler-plugin</artifactId>
++            <version>3.8.1</version>
++            <configuration>
++                <source>1.8</source>
++                <target>1.8</target>
++            </configuration>
++        </plugin>
++        <plugin>
++            <groupId>org.apache.maven.plugins</groupId>
++            <artifactId>maven-assembly-plugin</artifactId>
++            <version>3.3.0</version>
++            <executions>
++                <execution>
++                    <id>assembly</id>
++                    <phase>package</phase>
++                    <goals>
++                        <goal>single</goal>
++                    </goals>
++                    <configuration>
++                        <descriptorRefs>jar-with-dependencies</descriptorRefs>
++                        <archive>
++                            <manifest>
++                                <mainClass>app.Main</mainClass>
++                            </manifest>
++                        </archive>
++                    </configuration>
++                </execution>
++            </executions>
++        </plugin>
++        <plugin>
++            <groupId>org.apache.maven.plugins</groupId>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <version>2.5.1</version>
++            <executions>
++                <execution>
++                    <id>copy-dependencies</id>
++                    <phase>package</phase>
++                    <goals>
++                        <goal>copy-dependencies</goal>
++                    </goals>
++                    <configuration>
++                      <!--  <outputDyrectory>
++                            ${project.build.directory}/dependency-jars/
++                        </outputDyrectory>-->
++                    </configuration>
++                </execution>
++            </executions>
++        </plugin>
++    <plugin>
++            <groupId>org.apache.maven.plugins</groupId>
++            <artifactId>maven-surefire-plugin</artifactId>
++            <version>2.12.2</version>
++            <configuration>
++                <skipTests>true</skipTests>
++            </configuration>
++        </plugin>
++
++    </plugins>
++</build>
++        <dependencies>
++        <dependency>
++            <groupId>org.scream3r</groupId>
++            <artifactId>jssc</artifactId>
++            <version>2.8.0</version>
++            <scope>compile</scope>
++        </dependency>
++        <dependency>
++            <groupId>mysql</groupId>
++            <artifactId>mysql-connector-java</artifactId>
++            <version>8.0.16</version>
++        </dependency>
++        <dependency>
++            <groupId>commons-dbcp</groupId>
++            <artifactId>commons-dbcp</artifactId>
++            <version>1.4</version>
++        </dependency>
++        <dependency>
++                <groupId>org.eclipse.milo</groupId>
++                <artifactId>sdk-client</artifactId>
++                <version>0.4.1</version>
++        </dependency>
++        <dependency>
++                <groupId>org.eclipse.milo</groupId>
++                <artifactId>sdk-server</artifactId>
++                <version>0.4.1</version>
++            </dependency>
++    </dependencies>
++</project>
+\ No newline at end of file
+Index: src/main/java/app/Main.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/app/Main.java	(date 1593101501060)
++++ src/main/java/app/Main.java	(date 1593101501060)
+@@ -0,0 +1,253 @@
++package app;
++
++import javafx.application.Application;
++import javafx.application.Platform;
++import javafx.beans.property.BooleanProperty;
++import javafx.beans.property.SimpleBooleanProperty;
++import javafx.beans.value.ChangeListener;
++import javafx.collections.ObservableList;
++import javafx.geometry.Insets;
++import javafx.scene.Node;
++import javafx.scene.Scene;
++import javafx.scene.chart.LineChart;
++import javafx.scene.chart.NumberAxis;
++import javafx.scene.chart.XYChart;
++import javafx.scene.control.*;
++import javafx.scene.control.cell.CheckBoxTreeCell;
++import javafx.scene.image.Image;
++import javafx.scene.image.ImageView;
++import javafx.scene.layout.BorderPane;
++import javafx.scene.layout.HBox;
++import javafx.scene.layout.StackPane;
++import javafx.scene.layout.VBox;
++import javafx.stage.Stage;
++import javafx.util.StringConverter;
++import serial.Serial;
++import sql.DbUtil;
++
++import java.text.SimpleDateFormat;
++import java.util.Date;
++import java.util.HashMap;
++import java.util.Map;
++
++
++public class Main extends Application {
++    private DbUtil db;
++    Scene startScene, sceneMonitor;
++    //PhotoResistorFields
++    private LineChart<Number,Number> chart;
++    private XYChart.Series<Number,Number> luxSeries;
++    private XYChart.Series<Number,Number> aveLuxSeries5;
++    private XYChart.Series<Number,Number> aveLuxSeries10;
++    private NumberAxis xAxis;
++    private NumberAxis yAxis;
++    private final int tamMax=300; // 30'' / 0.1''/reading = 300 readings
++    /*the maximum number of points in each of them will be 300, relative to the last 30 seconds. For
++    the moving averages, they will be calculated based on periods of 5 seconds and 10 seconds.*/
++    private final int tamAve5=50; // 5''
++    private final int tamAve10=100; // 10''
++    private final Serial serial=new Serial();
++    private ChangeListener<String> listener;//functional interface
++    private final BooleanProperty connection=new SimpleBooleanProperty(false);
++    private Map<Long,Double> buff=new HashMap<>();
++    private final int BUFFSIZE=300;
++    private  final Node rootIcon=new ImageView(new Image("graph.png"));//Button();
++
++    public void start(Stage primaryStage) throws Exception {
++
++        //MainScene
++        Label labelStartScene=new Label("Chose a scene");
++        Button bMonitor=new Button("Monitor");
++        bMonitor.setOnAction(event -> {
++            primaryStage.setScene(sceneMonitor);
++            startSerial();
++        });
++        VBox layoutStartScene=new VBox(20);
++        layoutStartScene.getChildren().addAll(labelStartScene,bMonitor);
++        startScene=new Scene(layoutStartScene,300,250);
++
++        //*****************-monitorScene-*******************\\
++        xAxis=new NumberAxis();
++        xAxis.setLabel("Time");
++        xAxis.setAutoRanging(true);
++        xAxis.setForceZeroInRange(false);
++        /*
++        * For the xAxis to show formatted
++            data, we’ll override the toString() method, so every long value in milliseconds will be written in
++                HH:mm:ss format:
++        * */
++        xAxis.setTickLabelFormatter(new StringConverter<Number>() {
++            public String toString(Number t) {
++                return new SimpleDateFormat("HH:mm:ss").format(new Date(t.longValue()));
++            }
++            public Number fromString(String string) {
++                throw new UnsupportedOperationException("Not supported yet.");
++            }
++        });
++        yAxis=new NumberAxis();
++        chart=new LineChart<>(xAxis,yAxis);
++        /*
++        * setCreateSymbols(true)
++        will plot a big white circle on every point of the series. For now we set it to false, so it won’t create a
++        node on the data
++        * */
++        chart.setCreateSymbols(false);
++        /*
++        * setAnimated(false) avoids the animation of the chart after adding any new point.
++        Because we are plotting points at high frequency, it’s better this way. For lower frequencies, on the
++        other hand, we will set it to true to create a smooth transition effect
++        * */
++        chart.setAnimated(false);
++        chart.setLegendVisible(true);
++        chart.setTitle("Monitor");
++        luxSeries = new XYChart.Series<>();
++        luxSeries.setName("Light Level (lux)");
++        /*
++        aveLuxSeries5 = new XYChart.Series<>();
++        aveLuxSeries5.setName("Moving Average 5'' (lux)");
++        aveLuxSeries10 = new XYChart.Series<>();
++        aveLuxSeries10.setName("Moving Average 10'' (lux)");*/
++        chart.getData().addAll(luxSeries);//,aveLuxSeries5,aveLuxSeries10);
++        /*
++        * a listener will be created to bind the presence of any new line on the serial port (corresponding
++        to a reading of the sensor coming from the Arduino) with the action of adding this value as a new
++        pair to the series. For that we set the x coordinate value as the time when we add the reading in
++        milliseconds (on the chart it will be formatted to HH:mm:ss) and the y coordinate value is a double
++        measurement of the level of light reported by the Arduino in the String t1. As the series data could
++        grow indefinitely, to avoid memory issues and to keep track only of the data of the last 30 seconds,
++        we set a tamMax value of 300 points and remove the first values of the series if we exceed that limit.
++        * */
++        listener=(ov, oldData, newData) -> {
++            Platform.runLater(()->{
++                     try{
++                    String[] data=newData.split(Serial.SEPARATOR);
++
++                    if(data.length==2){
++                        long time=new Long(data[0]);
++                        buff.put(new Long(data[0]),new Double(data[1]));
++                        luxSeries.getData().add(new XYChart.Data(time,new Double(data[1])));
++                        /*if(luxSeries.getData().size()>tamMax){
++                            luxSeries.getData().remove(0);
++                        }*/
++                        /*if(luxSeries.getData().size()>=tamAve5){
++                            aveLuxSeries5.getData().add(new XYChart.Data<>(time, average(tamAve5)));
++                            if(aveLuxSeries5.getData().size()>tamMax){
++                                aveLuxSeries5.getData().remove(0);
++                            }
++                        }
++                        if(luxSeries.getData().size()>=tamAve10){
++                            aveLuxSeries10.getData().add(new XYChart.Data<>(time, average(tamAve10)));
++                            if(aveLuxSeries10.getData().size()>tamMax){
++                                aveLuxSeries10.getData().remove(0);
++                                               }
++                        }*/
++                        if(buff.size()==BUFFSIZE){
++                            db=new DbUtil("jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC","root","root");
++                            db.write(buff);
++                            System.out.println("SQL");
++                            buff.clear();
++                        }
++                    }
++                } catch(NumberFormatException nfe){
++                    System.out.println("NFE: "+newData+" "+nfe.toString());
++                }
++            });
++        };
++        /*
++        * Observe that by using Platform.run later(), not only do we place the task of filling the series
++        with the incoming data in the JavaFX thread, but also we give to the Scene graph the required time to
++        render the chart.
++        * */
++        serial.getLine().addListener(listener);
++        //******************- ArchiveMode-***************************\\
++
++        //DIALOG\\
++
++        CheckBoxTreeItem<String> rootItem=
++                new CheckBoxTreeItem<>("Choose a graph");
++        rootItem.setExpanded(true);
++        CheckBoxTreeItem<String> temp=new CheckBoxTreeItem<>("Temperature");
++        CheckBoxTreeItem<String> lux=new CheckBoxTreeItem<>("LightLevel");
++        rootItem.getChildren().addAll(temp,lux);
++        final TreeView treeView=new TreeView();
++        treeView.setRoot(rootItem);
++        treeView.setCellFactory(CheckBoxTreeCell.<String>forTreeView());
++        Dialog dialog=new Dialog();
++        dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
++        dialog.setTitle("pick a chart");
++        dialog.setHeaderText("some text");
++        StackPane dialogStack=new StackPane();
++        dialogStack.getChildren().addAll(treeView);
++        dialog.getDialogPane().setContent(dialogStack);
++
++        //*********
++
++
++        Button buttonArchive=new Button("ArchiveMode");
++        buttonArchive.setStyle("-fx-border-radius: 50;");
++        buttonArchive.setOnAction(event -> {
++            luxSeries.getData().removeAll();
++            System.out.println("buttonArchive");
++            Map<Long,Double> map=new DbUtil("jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC","root","root").read();
++            for(Map.Entry<Long,Double> entry:map.entrySet()){
++            luxSeries.getData().add(new XYChart.Data<>(entry.getKey(),entry.getValue().doubleValue()));}
++            System.out.println("sql has been completed");
++            System.out.println(map);
++        });
++
++        DatePicker dpStartDate=new DatePicker();
++        DatePicker dpEndDate=new DatePicker();
++
++
++        Button bDialog=new Button("dialog");
++        bDialog.setOnAction(event -> {dialog.show();});
++        HBox hBox=new HBox(buttonArchive,dpStartDate,dpEndDate,bDialog);
++        //************************
++        BorderPane root = new BorderPane();
++        StackPane stack =new StackPane();
++        stack.setPadding(new Insets(5,0,5,0));
++        stack.getChildren().add(chart);
++        root.setCenter(stack);
++        root.setTop(hBox);
++
++        Label lbl=new Label("Not connected");
++        connection.addListener((ov, b, b1)->lbl.setText(b1?
++                "Connected to: "+serial.getPortName():"Not connected"));
++        root.setBottom(lbl);
++        root.setStyle("-fx-background-color: derive(goldenrod,60%); "
++                + "-fx-font: 16 \"Courier New\";");
++        sceneMonitor =new Scene(root,800,600);
++
++
++
++        //primaryStage
++        primaryStage.setTitle("ArduinoApp");
++        primaryStage.setScene(startScene);
++        primaryStage.show();
++    }
++    public void stop(){
++        System.out.println("Closing serial port");
++        serial.getLine().removeListener(listener);
++        stopSerial();
++    }
++    private void startSerial(){
++        serial.connect();
++        connection.set(!serial.getPortName().isEmpty());
++    }
++    private void stopSerial(){
++        if(connection.get()){
++            serial.disconnect();
++            connection.set(false);
++        }
++    }
++    private double average(int tam){
++        return luxSeries.getData()
++                .stream()
++                .skip(luxSeries.getData().size()-tam)
++                .mapToDouble(d->d.getYValue().doubleValue())
++                .sum()/tam;
++    }
++    public static void main(String[] args) {
++launch(args);
++    }
++}
+Index: src/main/java/serial/Serial.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/serial/Serial.java	(date 1593016427261)
++++ src/main/java/serial/Serial.java	(date 1593016427261)
+@@ -0,0 +1,143 @@
++package serial;
++
++import javafx.beans.property.SimpleStringProperty;
++import javafx.beans.property.StringProperty;
++import javafx.scene.control.TextArea;
++import jssc.SerialPort;
++import jssc.SerialPortException;
++import jssc.SerialPortList;
++
++import java.text.SimpleDateFormat;
++import java.util.Arrays;
++import java.util.List;
++
++public class Serial {
++    private static final List<String> USUAL_PORTS = Arrays.asList(
++            "/dev/tty.usbmodem", "/dev/tty.usbserial", // Mac OS X
++            "/dev/usbdev","/dev/ttyUSB","/dev/ttyACM", "/dev/serial", // Linux
++            "COM3","COM4","COM5","COM6" // Windows
++    );
++    private final String ardPort;
++    private SerialPort serPort;
++    public static final String SEPARATOR= ";";
++    private StringBuilder sb=new StringBuilder();
++    private final StringProperty line=new SimpleStringProperty("");
++    SimpleDateFormat sdf=new SimpleDateFormat("d.MM 'at' kk:mm:ss");
++
++    public Serial(){
++        ardPort="";
++    }
++    public Serial(String port){
++        ardPort=port;
++    }
++
++
++
++    public boolean connect(){
++        Arrays.asList(SerialPortList.getPortNames())
++                .stream()
++                .filter(name->
++                        ((!ardPort.isEmpty() && name.equals(ardPort)) ||
++                                (ardPort.isEmpty() &&
++                                        USUAL_PORTS.stream()
++                                                .anyMatch(p -> name.startsWith(p)))))
++                .findFirst()
++                .ifPresent(name -> {
++                    try {
++                        serPort = new SerialPort(name);
++                        System.out.println("Connecting to "+serPort.getPortName());
++                        if(serPort.openPort()){
++                            serPort.setParams(SerialPort.BAUDRATE_9600,
++                                    SerialPort.DATABITS_8,
++                                    SerialPort.STOPBITS_1,
++                                    SerialPort.PARITY_NONE);
++                            serPort.setEventsMask(SerialPort.MASK_RXCHAR);
++                            serPort.addEventListener(event -> {
++                                if(event.isRXCHAR()){
++                                    try {
++                                        sb.append(serPort.readString(event.getEventValue()));
++                                        String ch=sb.toString();
++                                        if(ch.endsWith("\r\n")){
++                                            // add timestamp   Long.toString(System.currentTimeMillis())
++                                            //line.set(sdf.format(System.currentTimeMillis()) //  formated time
++                                            line.set(Long.toString(System.currentTimeMillis())   //  unformated time
++                                                    .concat(SEPARATOR)
++                                                    .concat(ch.substring(0,
++                                                            ch.indexOf("\r\n"))));
++                                            //sb.append(line);
++                                            //sb.append(Long.toString(System.currentTimeMillis()));
++                                            System.out.println(line);
++                                            sb=new StringBuilder();
++                                        }
++                                    } catch (SerialPortException e) {
++                                        System.out.println("SerialEvent error:"+ e.toString());
++                                    }
++                                }
++                            });
++                        }
++                    } catch (SerialPortException ex) {
++                        System.out.println("ERROR: Port '" + name + "': "+ex.toString());
++                    }
++                });
++        return serPort!=null;
++    }
++    public void disconnect(){
++        if (serPort != null) {
++            try {
++                serPort.removeEventListener();
++                if(serPort.isOpened()){
++                    serPort.closePort();
++                }
++            } catch (SerialPortException ex) {
++                System.out.println("ERROR closing port exception: "+ex.toString());
++            }
++            System.out.println("Disconnecting: comm port closed.");
++        }
++    }
++    public StringProperty getLine(){
++        return line;
++    }
++    public String getPortName(){
++        return serPort!=null?serPort.getPortName():"";
++    }
++
++    static void writeChar(char symbol, String portName, TextArea textArea){
++        SerialPort port=new SerialPort(portName);
++        try{
++            port.openPort();
++            port.setParams(SerialPort.BAUDRATE_9600,
++                    SerialPort.DATABITS_8,
++                    SerialPort.STOPBITS_1,
++                    SerialPort.PARITY_NONE);
++            try{
++                port.writeByte((byte) symbol);
++                textArea.appendText("byte has been sent"+'\n');
++            }finally {
++                port.closePort();
++            }
++        }catch(SerialPortException e){System.out.println(e.getMessage()+'\n');}
++    }
++    static void readChar(String portName,TextArea textArea){
++        SerialPort port=new SerialPort(portName);
++        char c;
++        try{
++            port.openPort();
++            port.setParams(SerialPort.BAUDRATE_9600,
++                    SerialPort.DATABITS_8,
++                    SerialPort.STOPBITS_1,
++                    SerialPort.PARITY_NONE);
++            try{
++                //while((c=port.readBytes())!=null)
++                port.readBytes();
++                textArea.appendText("byte has been sent"+'\n');
++            }finally {
++                port.closePort();
++            }
++        }catch(SerialPortException e){System.out.println(e.getMessage()+'\n');}
++    }
++
++    public static void main(String[] args) {
++        new Serial().connect();
++    }
++}
++
+Index: src/main/java/sql/DbUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/sql/DbUtil.java	(date 1593069852929)
++++ src/main/java/sql/DbUtil.java	(date 1593069852929)
+@@ -0,0 +1,115 @@
++package sql;
++
++import java.sql.*;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.Random;
++
++/**
++ * url="jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC";
++ * user="root";
++ * password="root";
++ */
++
++public class DbUtil {
++    private String url;
++    private String user;
++    private String password;
++    private String table = "photores";
++    Long time=667l;
++    Double value=1.2;
++
++
++
++    public DbUtil(String url,String user,String password){
++        this.url=url;
++        this.user=user;
++        this.password=password;
++    }
++    public void writePrSt(){
++
++    }
++    public void write(Map<Long,Double> buff)  {
++            try{
++            Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
++            Connection con = DriverManager.getConnection(url, user, password);
++            con.setAutoCommit(false);
++            StringBuilder query=new StringBuilder();
++            query.append("insert into "+table+" values (?,?);");
++            PreparedStatement preparedStatement=con.prepareStatement(query.toString());
++            try{
++            for(Map.Entry<Long,Double> entry:buff.entrySet()){
++                preparedStatement.setLong(1,entry.getKey());
++                preparedStatement.setDouble(2,entry.getValue());
++                preparedStatement.execute();
++            }
++            con.commit();}finally {
++                preparedStatement.close();
++                con.close();
++            }
++            } catch (SQLException e) {
++                e.printStackTrace();
++            }catch (ClassNotFoundException e){
++                e.printStackTrace();
++            } catch (IllegalAccessException e) {
++                e.printStackTrace();
++            } catch (InstantiationException e) {
++                e.printStackTrace();
++            }
++    }
++    public Map<Long,Double> read(){
++        Map<Long,Double> map=new HashMap<>();
++        try{
++            Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
++            Connection con = DriverManager.getConnection(url, user, password);
++            con.setAutoCommit(false);
++            ResultSet rs;
++            StringBuilder query=new StringBuilder();
++            query.append("select" +
++                            " time, value " +
++                        "from " +
++                        table+
++                        " where "+
++                    "time BETWEEN ? AND ? "+
++                    "order by time");
++            PreparedStatement preparedStatement=con.prepareStatement(query.toString());
++            try{
++                    preparedStatement.setLong(1,0);
++                    preparedStatement.setLong(2,1693015312215l);
++                    rs=preparedStatement.executeQuery();
++                    con.commit();
++                    while (rs.next()){
++                    map.put(rs.getLong(1),rs.getDouble(2));
++                    }
++            }finally {
++                preparedStatement.close();
++                con.close();
++            }
++        } catch (SQLException e) {
++            e.printStackTrace();
++        }catch (ClassNotFoundException e){
++            e.printStackTrace();
++        } catch (IllegalAccessException e) {
++            e.printStackTrace();
++        } catch (InstantiationException e) {
++            e.printStackTrace();
++        }
++
++        return map;
++    }
++   public static void main(String[] args){
++       Random random=new Random();
++       Map<Long,Double> map=new HashMap();
++/*
++       for (int i = 0; i <10 ; i++) {
++           map.put(new Long(i),random.nextDouble());
++       }
++*/
++
++       //new DbUtil("jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC","root","root").write(map);
++       System.out.println(new DbUtil("jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC","root","root").read());
++   }
++}
++
++
++
+Index: src/main/java/app/DateTimePicker.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/app/DateTimePicker.java	(date 1593105692709)
++++ src/main/java/app/DateTimePicker.java	(date 1593105692709)
+@@ -0,0 +1,13 @@
++package app;
++
++import javafx.beans.property.ObjectProperty;
++import javafx.scene.control.DatePicker;
++
++import java.time.LocalDateTime;
++import java.time.format.DateTimeFormatter;
++
++public class DateTimePicker extends DatePicker {
++    public static final String defaultFormat="dd-mm-yyyy HH:mm";
++    private DateTimeFormatter formatter;
++    private ObjectProperty<LocalDateTime> dateTimeValue;
++}
+Index: .idea/.gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- .idea/.gitignore	(date 1593252062305)
++++ .idea/.gitignore	(date 1593252062305)
+@@ -0,0 +1,2 @@
++# Default ignored files
++/workspace.xml
+\ No newline at end of file
+Index: src/main/java/sql/FX.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/sql/FX.java	(date 1593095382168)
++++ src/main/java/sql/FX.java	(date 1593095382168)
+@@ -0,0 +1,95 @@
++package sql;
++
++import javafx.application.Application;
++import javafx.geometry.Insets;
++import javafx.scene.Scene;
++import javafx.scene.chart.Chart;
++import javafx.scene.chart.LineChart;
++import javafx.scene.chart.NumberAxis;
++import javafx.scene.chart.XYChart;
++import javafx.scene.control.Button;
++import javafx.scene.control.Dialog;
++import javafx.scene.control.TextField;
++import javafx.scene.layout.BorderPane;
++import javafx.scene.layout.HBox;
++import javafx.scene.layout.StackPane;
++import javafx.scene.layout.VBox;
++import javafx.stage.Stage;
++import javafx.util.StringConverter;
++
++import java.text.SimpleDateFormat;
++import java.util.*;
++
++public class FX extends Application {
++    private NumberAxis xAxis;
++    private NumberAxis yAxis;
++    private XYChart.Series<Number,Number> series;
++    private LineChart<Number,Number> chart;
++    private StackPane stackPane;
++    private Scene mainScene;
++    public void start(Stage primaryStage) throws Exception {
++        /////////////////////////////////
++        xAxis=new NumberAxis();
++        xAxis.setLabel("xAxis");
++        xAxis.setAutoRanging(true);
++        xAxis.setForceZeroInRange(false);
++        xAxis.setTickLabelFormatter(new StringConverter<Number>() {
++            public String toString(Number t) {
++                return new SimpleDateFormat("HH:mm:ss").format(new Date(t.longValue()));
++            }
++            public Number fromString(String string) {
++                throw new UnsupportedOperationException("not supported yet");
++            }
++        });
++        yAxis=new NumberAxis();
++        yAxis.setLabel("yAxis");
++        yAxis.setAutoRanging(true);
++        yAxis.setForceZeroInRange(false);
++        series=new XYChart.Series();
++        series.setName("seriesName");
++        for (int i = 0; i <100 ; i++) {
++            series.getData().addAll(new XYChart.Data<>(i,i*1.55));
++        }
++        ////////////////////////////////
++        chart=new LineChart<>(xAxis,yAxis);
++        chart.setCreateSymbols(false);
++        chart.setAnimated(false);
++        chart.setLegendVisible(true);
++        chart.setTitle("chartTitle");
++        chart.getData().addAll(series);
++        //chart.getData().remove(series);
++        ///////////////////////////////
++        stackPane=new StackPane();
++        stackPane.setPadding(new Insets(10,30,10,10));
++        stackPane.getChildren().addAll(chart);
++        ///////////////////////////////
++        Button button=new Button("Button");
++        button.setOnAction(event -> {
++            System.out.println("bAction");
++            chart.getData().removeAll();
++            for(Map.Entry<Long,Double> entry:new DbUtil("jdbc:mysql://localhost:3307/arduinoDB?serverTimezone=UTC","root","root").read().entrySet()){
++                series.getData().add(new XYChart.Data<>(entry.getKey(),entry.getValue().doubleValue()));}
++                   });
++        VBox vBox=new VBox(button);
++        TextField tfStartDate=new TextField();
++        TextField tfEndDate=new TextField();
++        Button buttonArchive=new Button("Archive");
++        HBox hBox=new HBox(tfStartDate,tfEndDate,buttonArchive);
++        //////////////////////////////
++        BorderPane borderPane=new BorderPane();
++        borderPane.setCenter(stackPane);
++        borderPane.setLeft(vBox);
++        borderPane.setTop(hBox);
++        borderPane.setStyle("-fx-background-color: derive(goldenrod,60%); "
++                + "-fx-font: 16 \"Courier New\";");
++        mainScene=new Scene(borderPane,500,300);
++        //***********************
++        primaryStage.setTitle("TITLE");
++        primaryStage.setScene(mainScene);
++        primaryStage.show();
++    }
++
++    public static void main(String[] args) {
++        launch(args);
++    }
++}
+diff --git src/main/java/image.jpg src/main/java/image.jpg
+new file mode 100644
+index 0000000000000000000000000000000000000000..a12e03ea1b43e53bdc89c06eff22fb434d4faca5
+GIT binary patch
+literal 18122
+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
+z47UT9RKRAt>(L^ODa$yEa>kyDN%0D%=#MbWS5k#$%xb4W=x#NkFgO3|0EHi0Y+_TF
+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
+Bq>lgq
+
+diff --git src/main/resources/graph.png src/main/resources/graph.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..c04e79fa5f659908b383ac821db173467f45bf77
+GIT binary patch
+literal 2765
+zc$@*v3NrPHP)<h;3K|Lk000e1NJLTq007|t007|#0{{R332h=s0001%P)t-s|Ns9K
+zA2<L29Q5?{001KZ04NX~HUJPW001Qb03rYY9{>Oz00%1%8#N0VGynh_001fg4lV!y
+z7X=nFZE=0GwY%fw=G@)jH$G97n4kav7|YDiSzc@<E<|#6f$i?_h>Mj^Rb;xn!QS8E
+z$jZ(cBt4#?s76d&ASyw>!Nz84b*QVcjE|TwI7~xHT7QF$000kOV{s!;$Ugu83Gzuq
+zK~#90?Vam(;yMgQ6LP;0paud5ngG)REd@I7|8fTkW$aueCvk@nE8nk~)#7>+%a$eC
+z(X_nM#Xi~}#|1xm5RHO?t=ofObnlM*lxCm$MW3^Kcjaef*xf6k&5V0@=0~)2^lv%K
+zdw1q1G&S`<a;Nw1j(W`komc1KOwnLnfzTd2nkmj5UDTtQqF{tqQ~bDhr&KCqgck)5
+zWQvB<Eg-bR$1%m65k8tJ78v1Und0oJ1W?zX9>NrjZjljQP4OWd)Mc>|UQKax@9s5M
+zsS#dHk-URC`ws-v_5X;QV%8lkFhz&9DS}3LHAT{^qF{tk$-gO^qTr6Q<sYnQ!?>T&
+zbx;L&w5zAy?LS^>b3dZHR}_peh>gzeKOOP$QZ>b$$3b{&jVCm;HE*Im%?Rp*8;FCs
+zmLU|LFr(?(2u7&o2#tvQh2Fh8TT9$1?8RD+P@DB0hwx;CTAq+IMWUnhIN*#>D<IUC
+z-@g&8?%C1WO5Mv6&t5M)c|v1*nQg4!_v~i_#eIu0$9zsN|IHI>#wG}zu=9SuJ~ouG
+zo^O)dQddBD`WB|iG`>&o)T@y2q0|!6S4&7=Eg^lig!I)C(pO7JUo9bhwS@H564F;o
+zNM9}Czoyyr{jlH9leKiTlN8}NalDX4QI|P=f4i3Z5FtY2_~h8P-s)W|lwzbqICDZ>
+zlx-d)x=e;}*DEM<V)ifegH#B2y*%GZk%`VYL<mbO@glS+h6bS#+9iZ|rkV!fa8L%Q
+z>mHJ-CP5gNmuz24N&t}{d<TmuO}Mg&0-<3+fS4sxAY8d1q3)*8rzsE~k&0jQ4f-?%
+z!bt?+odo-*6bO+)syhkvX$pkUT5%QwOMf1L&>>Iw_@fk^X~1&@6bKW*D?Q5vJyQyV
+zBV?GG<X8L@K8F?^z)w>kL_BYozUK|^p6n3*FbP8KH!CMJckpLv5T@mG4VxgJr9qgK
+z8lnwvowT1KOy8!9B>C7WI{&sRy8Yox-QX_K#L=PWh6861T3#@JY2IFHl||Z^g@1?Y
+z33rjpd0EV#G=7kivU$dxU_(?>Pnb^3%oiSYK*t!@M{$_O4tw{=%*6eI?>pQ}eAT7m
+zPh#nj8#<9~cb(AJKjd0fOE?P(Pl>Z_{iY2*qs9)i>HCEBx9?Nwv9FYHoE@RJo;}xY
+zlfQz+hJEZ}DJ9&Ox*p-MW|M3F%xkTC0aX%~ObM6Hff2t_#T~AVdS8=5!nBhIyD8e&
+zYV(;}c%s)@O(-NhX0y<O{5lUY;hXg99X3-)=#=L8&SLZGEslJy0aLQ}A}e)-GcS+D
+z$?jKfKINz8+Sdc9BV2%kRM)-A9_oRcn(JSDq>gY7>{8F_R~==-)cjQ2gI7mbo@&2n
+zaIDsza95YLsNFAhgnk}MkW+0nGa}ww!#46zL&^xTo0;J3LQees75GLTkUGM?(r2jd
+z4ia^QXm+8>U4Ahix2WyZen}l+d9>&vBycNA@Yc4C`lXI=1XoNT^#q~>Z|$ks)d1=U
+zQ-siwcT7k87_IBAeM_NVx<wYm&O)*wA-2}|GACt(=@#*6PRq7TXiO7hYt3(rRYmx#
+zivpe&?oei=F8JXdG>*3_B7E_Ywc`3j{#)Qp@f+y|-rBd+5RL-G2LE*VfQ(e5ugF`w
+zHK>B{1Bzc{#QN|^6=Q1(-nyZJFoE~J8QH-CXiNQ#aS8~R;zF1kuTIuu1x9Mj2e_Mg
+zYu{>2nC`_|5Ehxjtm*{EotK%0m|HeOZkxx}vT8~=X5uOl9*o)H$#TxSJ3Df$&-uyc
+z`nAnOILb!qkpI1onv0wo63#M@$Nbs^rn~paYiK!>;pp1tFuOl49H~mZwQn^e%&rpr
+zqcIHeH?t#ka2=_}+sAzJyr0b1FMXBX+N~c=2&dw{-i8u-<LB&1eL8O#<D}z;Eb4Y6
+zX1N@ox|@uf5N1}1E)v#G{LD1#ZpOo)WLMc!kR89M0pVO+C76ZH45Qqf>Xq%9t%`v;
+zK(z^ti8$(<ExvIW?~$nS4PAk^cI&7-p)ro*n-?{H6~F#)BK7?wJsAhq_7uJ&O_p$#
+zY)#MeJ#+tY&M#+I30L+S$&o9u%d%A7?<+?*jm+;Wq@ysHysa{mMj&rC<7Xt=ae9Pm
+zoSCa+2uEgL0E*m9C*{gMzLk_#INhG1qQ(A85`;r!^JjM|Ugf&-k&%iOR8|sBxIso$
+z)URChG@c-Hs)bZkRuM|LK{~@;>&$yd_&EBDt3`r5LCIAjt2d-LUEy+p5WXO@f>k3s
+zf7Y?l0fS0H2w&k4nqRjlZ=*7e0}Cb`!RG+1+AqPt62=wNsgPhoIAaE%Hv)w%iA>#9
+z+aO^KM+v+2(_UywT-{yUAmJLx>-zYu6eVK+$S8eBe2@Ab@)BtoK8{vNAmJ8yYtmp*
+z_s=e{)uLW0W062YES6n=EWN>#G;$oRl0d>{$5TNK;4(jjFP;Div4l$lLfA1yE`q2e
+zkkD3K$i-<46&Q6@Zh=8UtQfD!CMN;*EK1)}1QJfMg31QRVT5<~h#J&%=S%(&L^y+8
+z4|~w$FPFY2G}4tGqJ#ZXctLF7m!35$HpQr~FqEiagj3LM>orV&tvUscy~ET3B7{cS
+zA(*eeG&Yy`H5);&{kiIMp2!Y(4fr0uf-igF^E*Z6M(W@7hQ(<%r7N?qB&eBASzrxV
+z#8~J)9e(0nb{L^i7RRuZ?Qi1sak*Lk{#dE=MR}po#Bo@-?AHxJ{e9sP;WV4P)z4w>
+zhUY^6qGa+G!(QewhJ8XWf0W8S%{IZGLru&wkN@t;{k$aehjC(ire#^K-(T)1@m0wI
+zk6%W+(Od1<)7?bl)`%u*3F)gPq_38czFI>1Y6<D9C8V#GkiJ?%`f3U3t0knbmhj)x
+z?%<ifE1ZfVM|e0NQDr^(ya_eJ<uy$dKFj83i4o3jrMHnMnH?fV$XCDzayeRJgu?CY
+z;j>H@g&3h&@E6IHhY=&p9v<-VkxGm(cK{^ZV{<As!Z>?EGwLBDl^UUzPO^1W$Veqe
+zcv>;CXNlp}pCF;Ova%x;dIJPS!h(?+l>4b92~Q(6dvdpYq!K06-mFY<Z>gWk5&Ee?
+zN7}D_wtl%}PUQ%7ze7l7zCgQp_2&u6D=NBe_@M}O+sfCdJ{Doo`QZm6wDSk~jp8?Y
+zla-w(?91MGNJ8C$%NVfJTeMVkjz9jqcdrzxXfD;X^(S_)nv9~S;=^?DJnY@uL#eJJ
+zpQe1DcyA}OhUEQHs*>MZ5LJc!AxTx*<5N_%I1NEnjJ1(d<#;JI#kmoR#k{GhdftMV
+zYUG}XX;?jfNK7?yz{FG|k55c5)oU@Rsd_yPIUUT?df`;4iK3^`GTIKyFUI*F&a|6(
+T^u=O600000NkvXXu0mjfBv(Yy
+
